@@ -1,13 +1,13 @@
 const WebSocket = require('ws');
 const domain = require('domain');
-const SteamUser = require('./steam');
+const SteamUser = require('steam-user');
 const poster = require('./post');
 const config = require('./config');
 const resultEnum = require('./Eresult');
 const purchaseResultEnum = require('./EPurchaseResult');
 
 module.exports = server => {
-    const wss = new WebSocket.Server({server});
+    const wss = new WebSocket.Server({ server });
     wss.on('connection', ws => {
         wsSend(ws, {
             action: 'connect',
@@ -16,7 +16,22 @@ module.exports = server => {
         });
 
         let steamClient = new SteamUser();
-        steamClient.setWebSocket(ws);
+        steamClient.WebSocket = ws;
+        steamClient.on('steamGuard', function (domain, callback) {
+            console.log(`Steam Guard code needed from ${domain ? domain : 'App'}`);
+
+            try {
+                ws.send(JSON.stringify({ action: 'authCode' }));
+            } catch (err) {
+                // TODO
+            }
+
+            this.removeAllListeners('doauth');
+            this.once('doauth', function (code) {
+                if (!this.steamID)
+                    callback(code);
+            });
+        });
 
         ws.on('message', message => dispatchMessage(ws, steamClient, message));
         ws.on('close', () => steamClient.logOff());
@@ -79,7 +94,8 @@ function doAuth(ws, steam, data) {
         wsSendError(ws, 'logOn', 'AuthCodeError');
         return;
     }
-    runSafely(ws, 'logOn', () => steam.emit('inputAuthCode', data.authCode));
+    steam.emit('doauth', data.authCode.trim());
+    runSafely(ws, 'doauth', () => steam.emit('doauth', data.authCode));
 }
 
 function doRedeem(ws, steam, data) {
