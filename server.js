@@ -20,6 +20,9 @@ let web = require('./web')(app);
 /* WebSocket Server */
 let ws = require('./ws')(server);
 
-server.listen(3999, () => {
-    console.log('Listening on %d', server.address().port);
+const port = process.env.PORT || 3999
+const host = process.env.HOST || ''
+
+server.listen(port, host, () => {
+    console.log('Listening on %s port %d', server.address().address, server.address().port);
 });
