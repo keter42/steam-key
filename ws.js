@@ -94,7 +94,6 @@ function doAuth(ws, steam, data) {
         wsSendError(ws, 'logOn', 'AuthCodeError');
         return;
     }
-    steam.emit('doauth', data.authCode.trim());
     runSafely(ws, 'doauth', () => steam.emit('doauth', data.authCode));
 }
 
