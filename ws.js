@@ -101,6 +101,7 @@ function doRedeem(ws, steam, data) {
     runSafely(ws, 'redeem', () => {
         data.keys.forEach(async key => redeemKey(steam, key).then(res => {
             wsSend(ws, res);
+            console.log(res);
             if (config && config.enableLog) {
                 for (let subId in res.detail.packages) {
                     if (res.detail.packages.hasOwnProperty(subId)) {
@@ -115,14 +116,14 @@ function doRedeem(ws, steam, data) {
 
 function redeemKey(steam, key) {
     return new Promise(resolve => {
-        steam.redeemKey(key, (result, detail, packages) => {
+        steam.redeemKey(key, (result) => {
             resolve({
                 action: 'redeem',
                 detail: {
                     key: key,
-                    result: resultEnum[result],
-                    detail: purchaseResultEnum[detail],
-                    packages: packages,
+                    result: resultEnum[result.eresult],
+                    detail: purchaseResultEnum[result.purchaseResultDetails],
+                    packages: result.packageList,
                 },
             });
         });
