@@ -5,6 +5,7 @@ const poster = require('./post');
 const config = require('./config');
 const resultEnum = require('./Eresult');
 const purchaseResultEnum = require('./EPurchaseResult');
+const { InvalidPassword } = require('./Eresult');
 
 module.exports = server => {
     const wss = new WebSocket.Server({ server });
@@ -68,14 +69,17 @@ function pong(ws, data) {
 }
 
 function doLogOn(ws, steam, data) {
-    runSafely(ws, 'logOn', () => {
-        steam.logOn({
-            accountName: data.username.trim(),
-            password: data.password.trim(),
-            twoFactorCode: data.authcode.trim(),
-            rememberPassword: false,
-            dontRememberMachine: true,
-        });
+    steam.on('error', (err) => {
+        if (err.eresult == InvalidPassword) {
+            wsSendError(ws, 'logOn', 'InvalidPassword');
+        }
+    })
+    steam.logOn({
+        accountName: data.username.trim(),
+        password: data.password.trim(),
+        twoFactorCode: data.authcode.trim(),
+        rememberPassword: false,
+        dontRememberMachine: true,
     });
     steam.once('accountInfo', (name, country) => {
         wsSend(ws, {
@@ -86,7 +90,7 @@ function doLogOn(ws, steam, data) {
                 country: country,
             },
         });
-    })
+    });
 }
 
 function doAuth(ws, steam, data) {
@@ -94,24 +98,22 @@ function doAuth(ws, steam, data) {
         wsSendError(ws, 'logOn', 'AuthCodeError');
         return;
     }
-    runSafely(ws, 'doauth', () => steam.emit('doauth', data.authCode));
+    steam.emit('doauth', data.authCode);
 }
 
 function doRedeem(ws, steam, data) {
-    runSafely(ws, 'redeem', () => {
-        data.keys.forEach(async key => redeemKey(steam, key).then(res => {
-            wsSend(ws, res);
-            console.log(res);
-            if (config && config.enableLog) {
-                for (let subId in res.detail.packages) {
-                    if (res.detail.packages.hasOwnProperty(subId)) {
-                        poster(config.postUrl, subId, res.detail.packages[subId], config.id);
-                        break;
-                    }
+    data.keys.forEach(async key => redeemKey(steam, key).then(res => {
+        wsSend(ws, res);
+        console.log(res);
+        if (config && config.enableLog) {
+            for (let subId in res.detail.packages) {
+                if (res.detail.packages.hasOwnProperty(subId)) {
+                    poster(config.postUrl, subId, res.detail.packages[subId], config.id);
+                    break;
                 }
             }
-        }));
-    });
+        }
+    }));
 }
 
 function redeemKey(steam, key) {
@@ -145,13 +147,6 @@ function wsSend(ws, stuff) {
     } catch (error) {
         // do nothing...
     }
-}
-
-function runSafely(ws, action, runnable, ...parameters) {
-    let dm = domain.create();
-    dm.on('error', err => wsSendError(ws, action, err.message || 'something went wrong...'));
-    parameters && parameters.forEach(p => dm.add(p));
-    dm.run(runnable);
 }
 
 function parseJSON(json, defaultValue = {}) {
